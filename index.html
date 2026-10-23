@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sol Check — Free Solana Address Validator</title>
+  <meta name="description" content="Paste a Solana address. Instantly check base58 length and decode. Free. Tip SOL if it helped." />
+  <style>
+    :root { --bg:#0b0f14; --card:#121821; --ink:#e8eef7; --muted:#8b9bb0; --ok:#3dd68c; --bad:#ff6b6b; --line:#1e2836; --accent:#9945FF; --accent2:#14F195; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: radial-gradient(1200px 600px at 20% -10%, #1a1030 0%, var(--bg) 55%); color: var(--ink); min-height:100vh; }
+    .wrap { max-width: 640px; margin: 0 auto; padding: 2rem 1.1rem 4rem; }
+    h1 { font-size: 1.55rem; margin: 0 0 .4rem; letter-spacing: -0.02em; }
+    .sub { color: var(--muted); margin: 0 0 1.5rem; line-height: 1.5; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 1.1rem 1.15rem; }
+    label { display:block; font-size:.8rem; color: var(--muted); margin-bottom:.45rem; }
+    textarea { width:100%; min-height: 88px; resize: vertical; background:#0a0e14; color:var(--ink); border:1px solid var(--line); border-radius:12px; padding:.85rem .9rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.95rem; }
+    textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+    .row { display:flex; gap:.6rem; margin-top:.75rem; flex-wrap:wrap; }
+    button { appearance:none; border:0; border-radius:999px; padding:.65rem 1.1rem; font-weight:600; cursor:pointer; }
+    .primary { background: linear-gradient(90deg, var(--accent), #7c3aed); color:#fff; }
+    .ghost { background: transparent; color: var(--muted); border:1px solid var(--line); }
+    #result { margin-top:1rem; min-height: 3.2rem; }
+    .badge { display:inline-flex; align-items:center; gap:.4rem; padding:.35rem .7rem; border-radius:999px; font-size:.85rem; font-weight:600; }
+    .ok { background: rgba(61,214,140,.12); color: var(--ok); }
+    .bad { background: rgba(255,107,107,.12); color: var(--bad); }
+    .meta { margin-top:.75rem; color: var(--muted); font-size:.9rem; line-height:1.45; word-break: break-all; }
+    .tip { margin-top:1.5rem; }
+    .tip h2 { font-size:1.05rem; margin:0 0 .5rem; }
+    .addr { font-family: ui-monospace, Menlo, monospace; font-size:.82rem; background:#0a0e14; border:1px solid var(--line); border-radius:10px; padding:.7rem .8rem; word-break:break-all; }
+    .tip-actions { display:flex; gap:.6rem; flex-wrap:wrap; margin-top:.8rem; }
+    a.pay { display:inline-flex; align-items:center; justify-content:center; text-decoration:none; background: linear-gradient(90deg, var(--accent2), #0ea5e9); color:#041016; font-weight:700; border-radius:999px; padding:.65rem 1.1rem; }
+    a.copybtn { display:inline-flex; align-items:center; justify-content:center; text-decoration:none; border:1px solid var(--line); color:var(--ink); border-radius:999px; padding:.65rem 1.1rem; font-weight:600; }
+    footer { margin-top:2rem; color:var(--muted); font-size:.8rem; line-height:1.45; }
+    .note { margin-top:1rem; color:var(--muted); font-size:.85rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Sol Check</h1>
+    <p class="sub">Free Solana address validator. Runs in your browser — nothing is uploaded. If it saved you a bad paste, tip a little SOL.</p>
+
+    <div class="card">
+      <label for="addr">Paste a Solana address</label>
+      <textarea id="addr" placeholder="e.g. FYG1RBkFh4PLWS27BGpUcYqhyAY3RuYmtBCDqLX9q2Eg" spellcheck="false"></textarea>
+      <div class="row">
+        <button class="primary" id="checkBtn" type="button">Validate</button>
+        <button class="ghost" id="clearBtn" type="button">Clear</button>
+      </div>
+      <div id="result"></div>
+    </div>
+
+    <div class="card tip">
+      <h2>Tip the builder in SOL</h2>
+      <p class="sub" style="margin:0 0 .75rem">Wallet-to-wallet. No middleman. Open Phantom / Solflare and send any amount.</p>
+      <div class="addr" id="tipAddr">FYG1RBkFh4PLWS27BGpUcYqhyAY3RuYmtBCDqLX9q2Eg</div>
+      <div class="tip-actions">
+        <a class="pay" id="phantomLink" href="#">Open in Phantom</a>
+        <a class="copybtn" href="#" id="copyTip">Copy address</a>
+      </div>
+      <p class="note">Suggested tip: 0.01–0.05 SOL if this helped. Never share a seed phrase. This page never asks for one.</p>
+    </div>
+
+    <footer>
+      Built free · client-side base58 + 32-byte check · Oct 2026<br />
+      Not a wallet. Not financial advice. Does not prove ownership or on-chain activity.
+    </footer>
+  </div>
+  <script>
+    const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    function decodeBase58(str) {
+      if (!str || typeof str !== 'string') throw new Error('empty');
+      const bytes = [0];
+      for (let i = 0; i < str.length; i++) {
+        const c = ALPHABET.indexOf(str[i]);
+        if (c < 0) throw new Error('invalid character: ' + str[i]);
+        let carry = c;
+        for (let j = 0; j < bytes.length; j++) {
+          carry += bytes[j] * 58;
+          bytes[j] = carry & 0xff;
+          carry >>= 8;
+        }
+        while (carry > 0) { bytes.push(carry & 0xff); carry >>= 8; }
+      }
+      for (let i = 0; i < str.length && str[i] === '1'; i++) bytes.push(0);
+      return new Uint8Array(bytes.reverse());
+    }
+    function validateSolanaAddress(raw) {
+      const s = (raw || '').trim();
+      if (!s) return { ok: false, reason: 'Paste an address first.' };
+      if (/\s/.test(s)) return { ok: false, reason: 'Address contains whitespace.' };
+      if (s.length < 32 || s.length > 44) return { ok: false, reason: 'Length ' + s.length + ' is outside the usual 32–44 range for Solana pubkeys.' };
+      let decoded;
+      try { decoded = decodeBase58(s); }
+      catch (e) { return { ok: false, reason: 'Not valid base58 (' + e.message + ').' }; }
+      if (decoded.length !== 32) {
+        return { ok: false, reason: 'Decoded to ' + decoded.length + ' bytes; Solana pubkeys are 32 bytes.' };
+      }
+      return { ok: true, length: s.length, bytes: 32, preview: s.slice(0,4) + '…' + s.slice(-4) };
+    }
+    const tip = 'FYG1RBkFh4PLWS27BGpUcYqhyAY3RuYmtBCDqLX9q2Eg';
+    const phantom = document.getElementById('phantomLink');
+    phantom.href = 'https://phantom.app/ul/browse/' + encodeURIComponent(location.href) + '?ref=' + encodeURIComponent(location.origin);
+    phantom.addEventListener('click', function(e) {
+      const solUri = 'solana:' + tip + '?label=' + encodeURIComponent('Sol Check tip');
+      window.location.href = solUri;
+      e.preventDefault();
+    });
+    function render() {
+      const r = validateSolanaAddress(document.getElementById('addr').value);
+      const el = document.getElementById('result');
+      if (!r.ok) {
+        el.innerHTML = '<span class="badge bad">✕ Invalid</span><div class="meta">' + r.reason + '</div>';
+        return;
+      }
+      el.innerHTML = '<span class="badge ok">✓ Valid format</span><div class="meta">Looks like a Solana pubkey (' + r.bytes + ' bytes after base58 decode). Display length ' + r.length + '. Preview ' + r.preview + '.<br/>This does <b>not</b> prove the wallet exists on-chain or that you own it.</div>';
+    }
+    document.getElementById('checkBtn').addEventListener('click', render);
+    document.getElementById('clearBtn').addEventListener('click', function() {
+      document.getElementById('addr').value = '';
+      document.getElementById('result').innerHTML = '';
+    });
+    document.getElementById('addr').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) render();
+    });
+    document.getElementById('copyTip').addEventListener('click', async function(e) {
+      e.preventDefault();
+      try {
+        await navigator.clipboard.writeText(tip);
+        this.textContent = 'Copied';
+        setTimeout(() => { this.textContent = 'Copy address'; }, 1500);
+      } catch (_) {
+        prompt('Copy this address:', tip);
+      }
+    });
+  </script>
+</body>
+</html>
